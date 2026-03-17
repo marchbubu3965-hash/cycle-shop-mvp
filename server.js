@@ -23,11 +23,11 @@ app.post('/api/login', (req, res) => {
 app.get('/api/user/:id', (req, res) => {
     db.get("SELECT user_id, username, is_admin, wallet_balance FROM Users WHERE user_id = ?", [req.params.id], (err, user) => {
         if (err) return res.status(500).json({ error: err.message });
-        if (!user) return res.status(404).json({ message: "找不到使用者" });
         res.json(user);
     });
 });
 
+// [更新] 查詢訂單紀錄：增加時間顯示與排序
 app.get('/api/user/:id/orders', (req, res) => {
     const sql = `
         SELECT oi.item_id, p.name, p.price, oi.buyback_status, o.created_at
@@ -35,6 +35,7 @@ app.get('/api/user/:id/orders', (req, res) => {
         JOIN Orders o ON oi.order_id = o.order_id
         JOIN Products p ON oi.product_id = p.product_id
         WHERE o.user_id = ?
+        ORDER BY o.created_at DESC
     `;
     db.all(sql, [req.params.id], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -43,23 +44,23 @@ app.get('/api/user/:id/orders', (req, res) => {
 });
 
 // ==========================================
-// 2. 商品管理 API (新增：接收 description 作為圖片網址)
+// 2. 商品管理 API
 // ==========================================
+
+app.get('/api/admin/inventory', (req, res) => {
+    db.all("SELECT * FROM Products ORDER BY stock ASC", [], (err, rows) => res.json(rows));
+});
+
+app.get('/api/products', (req, res) => {
+    db.all("SELECT * FROM Products WHERE status = 'active' AND stock > 0", [], (err, rows) => res.json(rows));
+});
 
 app.post('/api/products', (req, res) => {
     const { name, description, price, category, stock } = req.body;
-    // 我們將圖片網址存放在 description 欄位
     const sql = `INSERT INTO Products (name, description, price, category, status, stock) VALUES (?, ?, ?, ?, 'active', ?)`;
     db.run(sql, [name, description, price, category, stock], function(err) {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ message: "商品上架成功", productId: this.lastID });
-    });
-});
-
-app.get('/api/products', (req, res) => {
-    db.all("SELECT * FROM Products WHERE status = 'active' AND stock > 0", [], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
     });
 });
 
@@ -68,19 +69,26 @@ app.get('/api/products', (req, res) => {
 // ==========================================
 
 app.post('/api/checkout', (req, res) => {
-    const { user_id, product_id, quantity } = req.body;
-    db.get("SELECT * FROM Products WHERE product_id = ?", [product_id], (err, product) => {
-        if (!product || product.stock < quantity) return res.status(400).json({ message: "庫存不足" });
-        db.get("SELECT * FROM Users WHERE user_id = ?", [user_id], (err, user) => {
-            const total = product.price * quantity;
-            let used = Math.min(user.wallet_balance, total);
-            let pay = total - used;
-            db.serialize(() => {
-                db.run("UPDATE Products SET stock = stock - ? WHERE product_id = ?", [quantity, product_id]);
-                db.run("UPDATE Users SET wallet_balance = wallet_balance - ? WHERE user_id = ?", [used, user_id]);
-                db.run(`INSERT INTO Orders (user_id, final_amount, wallet_used) VALUES (?, ?, ?)`, [user_id, pay, used], function() {
-                    db.run(`INSERT INTO Order_Items (order_id, product_id, purchase_price) VALUES (?, ?, ?)`, [this.lastID, product_id, product.price]);
-                    res.json({ message: "結帳成功", new_balance: (user.wallet_balance - used) });
+    const { user_id, items } = req.body;
+    db.get("SELECT wallet_balance FROM Users WHERE user_id = ?", [user_id], (err, user) => {
+        let total_cost = items.reduce((sum, i) => sum + (i.price * i.qty), 0);
+        let wallet_used = Math.min(user.wallet_balance, total_cost);
+        let cash_payable = total_cost - wallet_used;
+
+        db.serialize(() => {
+            db.run("BEGIN TRANSACTION");
+            db.run("UPDATE Users SET wallet_balance = wallet_balance - ? WHERE user_id = ?", [wallet_used, user_id]);
+            db.run(`INSERT INTO Orders (user_id, final_amount, wallet_used) VALUES (?, ?, ?)`, 
+                [user_id, cash_payable, wallet_used], function() {
+                const order_id = this.lastID;
+                items.forEach(item => {
+                    db.run("UPDATE Products SET stock = stock - ? WHERE product_id = ?", [item.qty, item.id]);
+                    db.run("INSERT INTO Order_Items (order_id, product_id, purchase_price) VALUES (?, ?, ?)", 
+                        [order_id, item.id, item.price]);
+                });
+                db.run("COMMIT", (err) => {
+                    if (err) return res.status(500).json({ message: "交易失敗" });
+                    res.json({ message: "結帳成功", cash_payable, new_balance: (user.wallet_balance - wallet_used) });
                 });
             });
         });
@@ -88,7 +96,7 @@ app.post('/api/checkout', (req, res) => {
 });
 
 // ==========================================
-// 4. 回購與管理 API
+// 4. 回購 API
 // ==========================================
 
 app.get('/api/admin/buyback/pending', (req, res) => {
