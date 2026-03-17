@@ -11,6 +11,7 @@ app.use(bodyParser.json());
 // 1. 使用者與權限 API
 // ==========================================
 
+// [POST] 登入與權限檢查
 app.post('/api/login', (req, res) => {
     const { username } = req.body;
     db.get("SELECT * FROM Users WHERE username = ?", [username], (err, user) => {
@@ -25,6 +26,7 @@ app.post('/api/login', (req, res) => {
     });
 });
 
+// [GET] 查詢使用者資訊 (包含最新餘額)
 app.get('/api/user/:id', (req, res) => {
     db.get("SELECT user_id, username, is_admin, wallet_balance FROM Users WHERE user_id = ?", [req.params.id], (err, user) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -37,16 +39,17 @@ app.get('/api/user/:id', (req, res) => {
 // 2. 商品管理 API
 // ==========================================
 
+// [POST] 賣家上架商品
 app.post('/api/products', (req, res) => {
     const { name, description, price, category, stock } = req.body;
-    const sql = `INSERT INTO Products (name, description, price, category, status, stock) 
-                 VALUES (?, ?, ?, ?, 'active', ?)`;
+    const sql = `INSERT INTO Products (name, description, price, category, status, stock) VALUES (?, ?, ?, ?, 'active', ?)`;
     db.run(sql, [name, description, price, category, stock], function(err) {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ message: "商品上架成功", productId: this.lastID });
     });
 });
 
+// [GET] 買家瀏覽商品
 app.get('/api/products', (req, res) => {
     const category = req.query.category; 
     let sql = "SELECT * FROM Products WHERE status = 'active'";
@@ -62,59 +65,32 @@ app.get('/api/products', (req, res) => {
 });
 
 // ==========================================
-// 3. 結帳邏輯 API (強化穩定版)
+// 3. 結帳與購物金折抵 API
 // ==========================================
 
 app.post('/api/checkout', (req, res) => {
     const { user_id, product_id, quantity } = req.body;
 
-    // 步驟 A: 檢查商品庫存
     db.get("SELECT * FROM Products WHERE product_id = ?", [product_id], (err, product) => {
-        if (err) return res.status(500).json({ error: "查詢商品失敗: " + err.message });
-        if (!product) return res.status(400).json({ message: "找不到商品" });
-        if (product.stock < quantity) return res.status(400).json({ message: "庫存不足" });
+        if (err) return res.status(500).json({ error: err.message });
+        if (!product || product.stock < quantity) return res.status(400).json({ message: "商品不存在或庫存不足" });
 
-        // 步驟 B: 檢查使用者錢包
         db.get("SELECT * FROM Users WHERE user_id = ?", [user_id], (err, user) => {
-            if (err) return res.status(500).json({ error: "查詢使用者失敗: " + err.message });
+            if (err) return res.status(500).json({ error: err.message });
             if (!user) return res.status(400).json({ message: "找不到使用者" });
 
             const total_price = product.price * quantity;
-            let wallet_used = 0;
-            let final_payable = total_price;
+            let wallet_used = Math.min(user.wallet_balance, total_price);
+            let final_payable = total_price - wallet_used;
 
-            // 購物金折抵邏輯
-            if (user.wallet_balance > 0) {
-                if (user.wallet_balance >= total_price) {
-                    wallet_used = total_price;
-                    final_payable = 0;
-                } else {
-                    wallet_used = user.wallet_balance;
-                    final_payable = total_price - wallet_used;
-                }
-            }
-
-            // 步驟 C: 執行資料庫寫入 (確保同步執行)
             db.serialize(() => {
-                // 1. 更新商品庫存
                 db.run("UPDATE Products SET stock = stock - ? WHERE product_id = ?", [quantity, product_id]);
-
-                // 2. 更新使用者錢包餘額
                 db.run("UPDATE Users SET wallet_balance = wallet_balance - ? WHERE user_id = ?", [wallet_used, user_id]);
-
-                // 3. 建立訂單主表紀錄
                 db.run(`INSERT INTO Orders (user_id, final_amount, wallet_used) VALUES (?, ?, ?)`, 
                     [user_id, final_payable, wallet_used], function(err) {
-                        if (err) return res.status(500).json({ error: "訂單建立失敗: " + err.message });
-                        
                         const order_id = this.lastID;
-
-                        // 4. 建立訂單項目明細 (未來回購用)
                         db.run(`INSERT INTO Order_Items (order_id, product_id, purchase_price) VALUES (?, ?, ?)`, 
-                            [order_id, product_id, product.price], (err) => {
-                                if (err) return res.status(500).json({ error: "項目明細紀錄失敗" });
-
-                                // 全部成功，回傳結果
+                            [order_id, product_id, product.price], () => {
                                 res.json({
                                     message: "結帳成功",
                                     total_original: total_price,
@@ -122,20 +98,46 @@ app.post('/api/checkout', (req, res) => {
                                     cash_payable: final_payable,
                                     new_wallet_balance: (user.wallet_balance - wallet_used)
                                 });
-                            }
-                        );
-                    }
-                );
+                            });
+                    });
             });
         });
     });
 });
 
 // ==========================================
-// 啟動伺服器
+// 4. 回購機制 API
 // ==========================================
+
+// [POST] 買家申請回購
+app.post('/api/buyback/request', (req, res) => {
+    const { item_id } = req.body;
+    db.run("UPDATE Order_Items SET buyback_status = 'requested' WHERE item_id = ?", [item_id], (err) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ message: "回購申請已提交" });
+    });
+});
+
+// [POST] 賣家確認回購 (撥款 50% 購物金)
+app.post('/api/buyback/confirm', (req, res) => {
+    const { item_id } = req.body;
+    const sql = `SELECT oi.purchase_price, o.user_id FROM Order_Items oi JOIN Orders o ON oi.order_id = o.order_id WHERE oi.item_id = ?`;
+
+    db.get(sql, [item_id], (err, row) => {
+        if (err || !row) return res.status(404).json({ message: "找不到紀錄" });
+        const refund = row.purchase_price * 0.5;
+
+        db.serialize(() => {
+            db.run("UPDATE Users SET wallet_balance = wallet_balance + ? WHERE user_id = ?", [refund, row.user_id]);
+            db.run("UPDATE Order_Items SET buyback_status = 'completed' WHERE item_id = ?", [item_id]);
+            db.run("INSERT INTO Wallet_Logs (user_id, change_amount, type) VALUES (?, ?, 'buyback_refund')", [row.user_id, refund]);
+            res.json({ message: "審核成功", refunded: refund });
+        });
+    });
+});
+
 const PORT = 3000;
 app.listen(PORT, () => {
-    console.log(`✅ server.js 第三步：結帳與購物金邏輯 已啟動`);
-    console.log(`🚀 伺服器運行中：http://localhost:${PORT}`);
+    console.log(`🎉 循環商城 MVP 修正版啟動！`);
+    console.log(`🚀 測試查詢餘額：curl http://localhost:${PORT}/api/user/2`);
 });
