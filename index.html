@@ -1,8 +1,8 @@
-<!DOCTYPE html>
+<!-- <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>循環商城 - 管理員全功能版</title>
+    <title>循環商城 - 全功能修復版</title>
     <style>
         body { font-family: 'Segoe UI', sans-serif; max-width: 1100px; margin: 20px auto; padding: 20px; background: #f4f7f6; }
         .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); margin-bottom: 25px; }
@@ -13,64 +13,76 @@
         .product-img { width: 100%; height: 200px; object-fit: cover; background: #eee; }
         .item-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #f9f9f9; }
         button { cursor: pointer; padding: 8px 15px; border-radius: 6px; border: none; font-weight: bold; }
-        .btn-buy { background: #2ed573; color: white; width: 100%; }
-        .btn-admin { background: #1e90ff; color: white; }
+        .btn-buy { background: #2ed573; color: white; width: 100%; transition: 0.3s; }
+        .btn-buy:hover { background: #26af5f; }
+        .btn-del { background: #ff4757; color: white; padding: 4px 10px; font-size: 0.8em; }
         .btn-back { background: #f39c12; color: white; font-size: 0.8em; }
+        .btn-admin { background: #1e90ff; color: white; padding: 5px 10px; }
+        .tag { font-size: 0.8em; padding: 2px 8px; border-radius: 4px; color: white; font-weight: bold; }
         table { width: 100%; border-collapse: collapse; }
         th, td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; }
-        .pending-item { border-left: 5px solid #ffa502; padding: 10px; background: #fffaf0; margin-bottom: 10px; border-radius: 4px; }
+        .pending-item { border-left: 5px solid #ffa502; padding: 15px; background: #fffaf0; margin-bottom: 10px; border-radius: 8px; }
     </style>
 </head>
 <body>
 
     <div id="loginPage" class="card" style="max-width: 350px; margin: 80px auto; text-align: center;">
         <h2>♻️ 循環商城</h2>
-        <input type="text" id="usernameInput" placeholder="帳號" style="width:100%; padding:10px; margin-bottom:15px; box-sizing:border-box;">
-        <button class="btn-buy" onclick="login()">登入</button>
+        <input type="text" id="usernameInput" placeholder="請輸入帳號" style="width:100%; padding:10px; margin-bottom:15px; box-sizing:border-box; border-radius: 6px; border: 1px solid #ddd;">
+        <button class="btn-buy" onclick="login()">登入系統</button>
     </div>
 
     <div id="mainPage" class="hidden">
         <div class="navbar">
             <h2 id="welcomeMsg">您好</h2>
             <div id="cartToggle" style="background:#ff4757; color:white; padding:10px 20px; border-radius:30px; cursor:pointer;" onclick="toggleCart()">🛒 購物車 (<span id="cartCount">0</span>)</div>
-            <button onclick="location.reload()">登出</button>
+            <button onclick="location.reload()" style="background:#666; color:white;">登出</button>
         </div>
 
-        <div id="cartSection" class="card hidden">
+        <div id="cartSection" class="card hidden" style="border: 2px solid #ff4757; position: relative;">
             <h3>🛒 我的購物車</h3>
             <div id="cartItems"></div>
-            <button class="btn-buy" style="margin-top:10px;" onclick="checkout()">確認結帳</button>
+            <div id="cartTotal" style="text-align:right; font-weight:bold; margin: 15px 0; font-size: 1.2em;">總計: $0</div>
+            <button class="btn-buy" onclick="checkout()">確認結帳並扣款</button>
         </div>
 
         <div id="buyerUI" class="hidden">
-            <div class="card" style="background: #e3f2fd;">
-                <h4>💰 帳戶餘額：<span id="userBalance">$0</span></h4>
+            <div class="card" style="background: #e3f2fd; display: flex; justify-content: space-between; align-items: center;">
+                <h4 style="margin:0;">💰 帳戶餘額：<span id="userBalance">$0</span></h4>
+                <small style="color:#666;">(購物金將優先扣除)</small>
             </div>
+            
+            <input type="text" id="searchInput" placeholder="🔍 搜尋商品..." style="width:100%; padding:12px; margin-bottom:20px; border-radius:8px; border:1px solid #ddd;" oninput="filterProducts()">
+            
             <div id="productList" class="grid"></div>
-            <h3 style="margin-top: 40px;">📋 我的歷史訂單</h3>
-            <div id="batchOrderList"></div>
+
+            <h3 style="margin-top: 40px; border-left: 5px solid #2ed573; padding-left: 10px;">🛍️ 購買紀錄 (未回購)</h3>
+            <div id="purchaseList"></div>
+
+            <h3 style="margin-top: 40px; border-left: 5px solid #f39c12; padding-left: 10px;">♻️ 已完成回購紀錄</h3>
+            <div id="buybackHistoryList"></div>
         </div>
 
         <div id="adminUI" class="hidden">
             <div class="card" style="border: 2px solid #ffa502;">
-                <h3>🛠 庫存監控</h3>
+                <h3 style="color: #d35400;">🛠 管理員庫存監控</h3>
                 <table>
                     <thead>
-                        <tr><th>編號</th><th>名稱</th><th>庫存</th><th>操作</th></tr>
+                        <tr><th>編號</th><th>名稱</th><th>庫存數量</th><th>操作</th></tr>
                     </thead>
                     <tbody id="inventoryBody"></tbody>
                 </table>
                 <hr>
                 <h3>➕ 上架新商品</h3>
                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-                    <input type="text" id="pName" placeholder="名稱">
+                    <input type="text" id="pName" placeholder="商品名稱">
                     <input type="number" id="pPrice" placeholder="價格">
                     <input type="number" id="pStock" placeholder="庫存">
-                    <input type="file" id="pImgFile">
+                    <input type="file" id="pImgFile" accept="image/*">
                 </div>
                 <button class="btn-buy" style="width:auto; margin-top:10px;" onclick="addProduct()">確認上架</button>
                 <hr>
-                <h3 style="color: #e67e22;">⏳ 待處理回購審核</h3>
+                <h3 style="color: #e67e22;">⏳ 待處理回購審核 (最新的在上)</h3>
                 <div id="adminPendingList"></div>
             </div>
         </div>
@@ -86,113 +98,152 @@
         async function login() {
             const username = document.getElementById('usernameInput').value;
             const res = await fetch(`${API_URL}/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username }) });
-            if (res.ok) { currentUser = await res.json(); showUI(); }
+            if (res.ok) { 
+                currentUser = await res.json(); 
+                showUI(); 
+            } else {
+                alert("登入失敗，請檢查帳號");
+            }
         }
 
         function showUI() {
             document.getElementById('loginPage').classList.add('hidden');
             document.getElementById('mainPage').classList.remove('hidden');
-            document.getElementById('welcomeMsg').innerText = `👋 ${currentUser.username}${currentUser.isAdmin ? ' (管理員)' : ''}`;
+            document.getElementById('welcomeMsg').innerText = `👋 您好，${currentUser.username}${currentUser.isAdmin ? ' (管理模式)' : ''}`;
+            
             if (currentUser.isAdmin) {
                 document.getElementById('adminUI').classList.remove('hidden');
+                document.getElementById('buyerUI').classList.add('hidden'); // 確保切換乾淨
                 fetchAdminData();
             } else {
                 document.getElementById('buyerUI').classList.remove('hidden');
+                document.getElementById('adminUI').classList.add('hidden');
                 fetchBuyerData();
             }
         }
 
-        // --- 買家 ---
+        // --- 買家邏輯 ---
         async function fetchBuyerData() {
-            const prodRes = await fetch(`${API_URL}/products`);
-            allProducts = await prodRes.json();
-            renderProducts(allProducts);
-
             const userRes = await fetch(`${API_URL}/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: currentUser.username }) });
             const userData = await userRes.json();
             document.getElementById('userBalance').innerText = `$${userData.balance}`;
 
+            const prodRes = await fetch(`${API_URL}/products`);
+            allProducts = await prodRes.json();
+            renderProducts(allProducts);
+
             const orderRes = await fetch(`${API_URL}/user/${currentUser.id}/orders`);
             const batches = await orderRes.json();
-            renderOrders(batches);
+            // 倒序顯示：ID 大的排前面
+            renderSeparatedOrders(batches.sort((a,b) => b.id - a.id));
         }
 
         function renderProducts(prods) {
             document.getElementById('productList').innerHTML = prods.map(p => `
                 <div class="product-card">
-                    <img class="product-img" src="${p.description ? BASE_URL + p.description : 'https://via.placeholder.com/240x200'}">
+                    <img class="product-img" src="${p.description ? BASE_URL + p.description : 'https://via.placeholder.com/240x200'}" onerror="this.src='https://via.placeholder.com/240x200'">
                     <div style="padding:15px;">
-                        <h4>${p.name}</h4>
-                        <p style="color:#e44d26; font-weight:bold;">$${p.price}</p>
-                        <p style="font-size:0.8em; color:#888;">庫存: ${p.stock}</p>
+                        <h4 style="margin:0;">${p.name}</h4>
+                        <p style="color:#e44d26; font-weight:bold; font-size:1.2em; margin:5px 0;">$${p.price}</p>
+                        <p style="font-size:0.8em; color:#888; margin-bottom:10px;">庫存: ${p.stock}</p>
                         <button class="btn-buy" onclick="addToCart(${p.product_id}, '${p.name}', ${p.price})">加入購物車</button>
                     </div>
                 </div>
             `).join('');
         }
 
-        function renderOrders(batches) {
-            document.getElementById('batchOrderList').innerHTML = batches.map(batch => `
-                <div class="card" style="border-left:5px solid #1e90ff;">
-                    <div style="font-size:0.8em; color:#999;">#${batch.id} - ${new Date(batch.date).toLocaleString()}</div>
-                    ${batch.items.map(item => `
+        function renderSeparatedOrders(batches) {
+            let purchaseHtml = "";
+            let buybackHtml = "";
+            batches.forEach(batch => {
+                const activeItems = batch.items.filter(i => i.buyback_status !== 'completed');
+                const doneItems = batch.items.filter(i => i.buyback_status === 'completed');
+                if (activeItems.length > 0) purchaseHtml += createOrderCard(batch, activeItems, "purchase");
+                if (doneItems.length > 0) buybackHtml += createOrderCard(batch, doneItems, "buyback");
+            });
+            document.getElementById('purchaseList').innerHTML = purchaseHtml || "<p style='color:#999;'>尚無購買紀錄</p>";
+            document.getElementById('buybackHistoryList').innerHTML = buybackHtml || "<p style='color:#999;'>尚未有成功回購紀錄</p>";
+        }
+
+        function createOrderCard(batch, items, type) {
+            return `
+                <div class="card" style="border-left:5px solid ${type==='purchase'?'#1e90ff':'#f39c12'};">
+                    <div style="font-size:0.8em; color:#999; margin-bottom:8px;">訂單 #${batch.id} - ${new Date(batch.date).toLocaleString()}</div>
+                    ${items.map(item => `
                         <div class="item-row">
                             <span>${item.name} ($${item.price})</span>
-                            ${item.buyback_status === 'none' ? `<button class="btn-back" onclick="requestBuyback(${item.item_id})">申請回購</button>` : `<span>[${item.buyback_status}]</span>`}
+                            ${type === 'purchase' ? 
+                                (item.buyback_status === 'none' ? `<button class="btn-back" onclick="requestBuyback(${item.item_id})">申請回購</button>` : `<span class="tag" style="background:#ffeaa7; color:#d6a316;">處理中</span>`) 
+                                : `<span class="tag" style="background:#55efc4; color:#00b894;">已回購</span>`
+                            }
                         </div>
                     `).join('')}
                 </div>
-            `).join('');
+            `;
         }
 
+        // --- 購物車功能 ---
         function addToCart(id, name, price) {
-            const existing = cart.find(i => i.id === id);
-            if (existing) existing.qty++; else cart.push({ id, name, price, qty: 1 });
-            updateCartUI(); alert("已加入購物車");
+            const item = cart.find(i => i.id === id);
+            if (item) item.qty++; else cart.push({ id, name, price, qty: 1 });
+            updateCartUI();
+            alert(`已將 ${name} 加入購物車`);
+        }
+
+        function removeFromCart(id) {
+            cart = cart.filter(i => i.id !== id);
+            updateCartUI();
         }
 
         function updateCartUI() {
-            document.getElementById('cartCount').innerText = cart.reduce((s, i) => s + i.qty, 0);
-            document.getElementById('cartItems').innerHTML = cart.map(item => `<div class="item-row"><span>${item.name}</span><span>$${item.price} x ${item.qty}</span></div>`).join('');
+            const count = cart.reduce((s, i) => s + i.qty, 0);
+            const total = cart.reduce((s, i) => s + (i.price * i.qty), 0);
+            document.getElementById('cartCount').innerText = count;
+            document.getElementById('cartTotal').innerText = `總計: $${total}`;
+            document.getElementById('cartItems').innerHTML = cart.map(item => `
+                <div class="item-row">
+                    <span>${item.name} ($${item.price} x ${item.qty})</span>
+                    <button class="btn-del" onclick="removeFromCart(${item.id})">❌ 移除</button>
+                </div>
+            `).join('');
         }
 
         function toggleCart() { document.getElementById('cartSection').classList.toggle('hidden'); }
 
         async function checkout() {
+            if (cart.length === 0) return;
             await fetch(`${API_URL}/checkout`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: currentUser.id, items: cart }) });
-            cart = []; updateCartUI(); toggleCart(); fetchBuyerData(); alert("結帳成功");
+            cart = []; updateCartUI(); toggleCart(); fetchBuyerData(); alert("結帳成功！");
         }
 
         async function requestBuyback(iid) {
             await fetch(`${API_URL}/buyback/request`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item_id: iid })});
-            fetchBuyerData(); alert("申請已送出");
+            fetchBuyerData(); alert("回購申請已送出！");
         }
 
-        // --- 管理員 ---
+        // --- 管理員邏輯 ---
         async function fetchAdminData() {
-            // 庫存
+            // 庫存清單
             const invRes = await fetch(`${API_URL}/admin/inventory`);
             const inventory = await invRes.json();
             document.getElementById('inventoryBody').innerHTML = inventory.map(p => `
                 <tr>
                     <td>#${p.product_id}</td>
                     <td>${p.name}</td>
-                    <td><input type="number" id="stock_${p.product_id}" value="${p.stock}" style="width:50px;"></td>
+                    <td><input type="number" id="stock_${p.product_id}" value="${p.stock}" style="width:60px;"></td>
                     <td><button class="btn-admin" onclick="updateStock(${p.product_id})">儲存</button></td>
                 </tr>
             `).join('');
 
-            // 回購審核 (補回這裡)
+            // 回購審核 (倒序)
             const pendingRes = await fetch(`${API_URL}/admin/buyback/pending`);
             const pending = await pendingRes.json();
             const container = document.getElementById('adminPendingList');
-            
             if (pending.length === 0) {
-                container.innerHTML = "<p style='color:#999;'>目前沒有待處理的回購。</p>";
+                container.innerHTML = "<p style='color:#999;'>目前沒有待處理申請。</p>";
                 return;
             }
-
-            container.innerHTML = pending.map(p => `
+            container.innerHTML = pending.sort((a,b)=>b.item_id - a.item_id).map(p => `
                 <div class="pending-item">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
                         <div>
@@ -200,8 +251,8 @@
                             <small>原購買價: $${p.purchase_price}</small>
                         </div>
                         <div>
-                            <input type="number" id="refund_${p.item_id}" value="${Math.floor(p.purchase_price * 0.8)}" style="width:70px; padding:5px;">
-                            <button class="btn-buy" style="width:auto;" onclick="confirmBuyback(${p.item_id})">核發購物金</button>
+                            回購金: <input type="number" id="refund_${p.item_id}" value="${Math.floor(p.purchase_price * 0.8)}" style="width:70px; padding:5px;">
+                            <button class="btn-buy" style="width:auto; margin-left:10px;" onclick="confirmBuyback(${p.item_id})">核發購物金</button>
                         </div>
                     </div>
                 </div>
@@ -211,7 +262,7 @@
         async function updateStock(pid) {
             const val = document.getElementById(`stock_${pid}`).value;
             await fetch(`${API_URL}/admin/inventory/${pid}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stock: parseInt(val) }) });
-            fetchAdminData();
+            fetchAdminData(); alert("更新成功");
         }
 
         async function addProduct() {
@@ -221,17 +272,320 @@
             formData.append('stock', document.getElementById('pStock').value);
             formData.append('image', document.getElementById('pImgFile').files[0]);
             await fetch(`${API_URL}/products`, { method: 'POST', body: formData });
-            fetchAdminData(); alert("上架成功");
+            fetchAdminData(); alert("上架成功！");
         }
 
         async function confirmBuyback(iid) {
             const amt = document.getElementById(`refund_${iid}`).value;
-            await fetch(`${API_URL}/buyback/confirm`, { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify({ item_id: iid, refund_amount: parseInt(amt) })
-            });
-            fetchAdminData(); alert("購物金已核發給使用者");
+            await fetch(`${API_URL}/buyback/confirm`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item_id: iid, refund_amount: parseInt(amt) }) });
+            fetchAdminData(); alert("回購完成，已核發購物金。");
+        }
+
+        function filterProducts() {
+            const term = document.getElementById('searchInput').value.toLowerCase();
+            const filtered = allProducts.filter(p => p.name.toLowerCase().includes(term));
+            renderProducts(filtered);
+        }
+    </script>
+</body>
+</html> -->
+
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>循環商城 - 完整版紀錄系統</title>
+    <style>
+        :root { --primary: #2ed573; --secondary: #1e90ff; --accent: #f39c12; --danger: #ff4757; --bg: #f4f7f6; }
+        body { font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif; max-width: 1100px; margin: 20px auto; padding: 20px; background: var(--bg); color: #2c3e50; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); margin-bottom: 25px; }
+        .hidden { display: none; }
+        .navbar { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 15px; margin-bottom: 20px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 20px; }
+        .product-card { background: #fff; border-radius: 10px; border: 1px solid #eee; overflow: hidden; display: flex; flex-direction: column; transition: 0.3s; }
+        .product-card:hover { transform: translateY(-5px); box-shadow: 0 6px 15px rgba(0,0,0,0.1); }
+        .product-img { width: 100%; height: 200px; object-fit: cover; background: #eee; }
+        .item-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f1f1f1; }
+        button { cursor: pointer; padding: 8px 16px; border-radius: 6px; border: none; font-weight: bold; transition: 0.2s; }
+        .btn-buy { background: var(--primary); color: white; width: 100%; }
+        .btn-del { background: var(--danger); color: white; padding: 4px 10px; font-size: 0.85em; }
+        .btn-back { background: var(--accent); color: white; font-size: 0.85em; }
+        .tag { font-size: 0.8em; padding: 3px 10px; border-radius: 20px; color: white; font-weight: bold; }
+        .payment-info { background: #f9f9f9; padding: 10px; border-radius: 6px; margin-top: 10px; font-size: 0.9em; text-align: right; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; }
+    </style>
+</head>
+<body>
+
+    <div id="loginPage" class="card" style="max-width: 380px; margin: 100px auto; text-align: center;">
+        <h2 style="font-size: 2em; margin-bottom: 5px;">♻️ 循環商城</h2>
+        <p style="color:#888; margin-bottom: 25px;">讓每一件衣物重新流動</p>
+        <input type="text" id="usernameInput" placeholder="帳號名稱" style="width:100%; padding:12px; margin-bottom:15px; box-sizing:border-box; border-radius: 8px; border: 1px solid #ddd;">
+        <button class="btn-buy" onclick="login()">進入商城</button>
+    </div>
+
+    <div id="mainPage" class="hidden">
+        <div class="navbar">
+            <h2 id="welcomeMsg">您好</h2>
+            <div id="cartToggle" style="background:var(--danger); color:white; padding:10px 22px; border-radius:30px; cursor:pointer;" onclick="toggleCart()">🛒 購物車 (<span id="cartCount">0</span>)</div>
+            <button onclick="location.reload()" style="background:#888; color:white;">登出</button>
+        </div>
+
+        <div id="cartSection" class="card hidden" style="border: 2px solid var(--danger);">
+            <h3 style="margin-top:0;">🛒 我的購物車</h3>
+            <div id="cartItems"></div>
+            <div id="cartTotal" style="text-align:right; font-weight:bold; margin: 15px 0; font-size: 1.3em; color: var(--danger);">總計: $0</div>
+            <button class="btn-buy" onclick="checkout()">確認結帳</button>
+        </div>
+
+        <div id="buyerUI" class="hidden">
+            <div class="card" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);">
+                <h4 style="margin:0;">💰 帳戶餘額：<span id="userBalance" style="font-size: 1.4em;">$0</span></h4>
+                <p style="font-size:0.85em; color:#5c7c99; margin: 5px 0 0 0;">(結帳時會優先抵用帳戶內的回購購物金)</p>
+            </div>
+            
+            <input type="text" id="searchInput" placeholder="🔍 搜尋商品名稱..." style="width:100%; padding:14px; margin-bottom:25px; border-radius:10px; border:1px solid #ddd; font-size: 1em;" oninput="filterProducts()">
+            
+            <div id="productList" class="grid"></div>
+
+            <h3 style="margin-top: 50px; border-left: 6px solid var(--secondary); padding-left: 15px;">🛍️ 購買紀錄 (包含支付明細)</h3>
+            <div id="purchaseList"></div>
+
+            <h3 style="margin-top: 50px; border-left: 6px solid var(--accent); padding-left: 15px;">♻️ 已完成回購清單</h3>
+            <div id="buybackHistoryList"></div>
+        </div>
+
+        <div id="adminUI" class="hidden">
+            <div class="card" style="border-top: 6px solid var(--accent);">
+                <h3 style="color: var(--accent);">🛠 庫存與商品管理</h3>
+                <table>
+                    <thead>
+                        <tr><th>編號</th><th>名稱</th><th>目前庫存</th><th>操作</th></tr>
+                    </thead>
+                    <tbody id="inventoryBody"></tbody>
+                </table>
+                <hr style="margin:25px 0;">
+                <h3>➕ 上架新商品</h3>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+                    <input type="text" id="pName" placeholder="商品名稱">
+                    <input type="number" id="pPrice" placeholder="價格">
+                    <input type="number" id="pStock" placeholder="初始庫存">
+                    <input type="file" id="pImgFile" accept="image/*">
+                </div>
+                <button class="btn-buy" style="width:auto; margin-top:15px; background: var(--secondary);" onclick="addProduct()">確認並上架</button>
+                
+                <hr style="margin:30px 0;">
+                <h3 style="color: var(--accent);">⏳ 待處理回購審核 (最新優先)</h3>
+                <div id="adminPendingList"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const BASE_URL = "http://localhost:3000";
+        const API_URL = `${BASE_URL}/api`;
+        let currentUser = null;
+        let allProducts = [];
+        let cart = [];
+
+        async function login() {
+            const username = document.getElementById('usernameInput').value;
+            if(!username) return alert("請輸入帳號");
+            const res = await fetch(`${API_URL}/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username }) });
+            if (res.ok) { currentUser = await res.json(); showUI(); } else { alert("使用者不存在"); }
+        }
+
+        function showUI() {
+            document.getElementById('loginPage').classList.add('hidden');
+            document.getElementById('mainPage').classList.remove('hidden');
+            document.getElementById('welcomeMsg').innerText = `👋 您好，${currentUser.username}${currentUser.isAdmin ? ' (管理員模式)' : ''}`;
+            
+            if (currentUser.isAdmin) {
+                document.getElementById('adminUI').classList.remove('hidden');
+                fetchAdminData();
+            } else {
+                document.getElementById('buyerUI').classList.remove('hidden');
+                fetchBuyerData();
+            }
+        }
+
+        // --- 買家資料渲染邏輯 ---
+        async function fetchBuyerData() {
+            const userRes = await fetch(`${API_URL}/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: currentUser.username }) });
+            const userData = await userRes.json();
+            document.getElementById('userBalance').innerText = `$${userData.balance}`;
+
+            const prodRes = await fetch(`${API_URL}/products`);
+            allProducts = await prodRes.json();
+            renderProducts(allProducts);
+
+            const orderRes = await fetch(`${API_URL}/user/${currentUser.id}/orders`);
+            const batches = await orderRes.json();
+            renderComprehensiveLogs(batches.sort((a,b) => b.id - a.id));
+        }
+
+        function renderProducts(prods) {
+            document.getElementById('productList').innerHTML = prods.map(p => `
+                <div class="product-card">
+                    <img class="product-img" src="${p.description ? BASE_URL + p.description : 'https://via.placeholder.com/240x200'}" onerror="this.src='https://via.placeholder.com/240x200'">
+                    <div style="padding:15px;">
+                        <h4 style="margin:0 0 10px 0;">${p.name}</h4>
+                        <p style="color:var(--danger); font-weight:bold; font-size:1.3em; margin:0;">$${p.price}</p>
+                        <p style="font-size:0.85em; color:#888; margin: 5px 0 15px 0;">庫存: ${p.stock}</p>
+                        <button class="btn-buy" onclick="addToCart(${p.product_id}, '${p.name}', ${p.price})">加入購物車</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderComprehensiveLogs(batches) {
+            // 1. 購買清單渲染
+            let purchaseHtml = batches.map(batch => {
+                const wallet = batch.wallet_used || 0;
+                const cash = batch.total - wallet;
+                return `
+                    <div class="card" style="border-left: 6px solid var(--secondary);">
+                        <div style="font-size:0.85em; color:#999; margin-bottom:10px;">訂單 #${batch.id} - ${new Date(batch.date).toLocaleString()}</div>
+                        ${batch.items.map(item => `
+                            <div class="item-row">
+                                <span>${item.name} ($${item.price})</span>
+                                ${item.buyback_status === 'none' ? `<button class="btn-back" onclick="requestBuyback(${item.item_id})">申請回購</button>` : 
+                                  `<span class="tag" style="background:${item.buyback_status==='requested'?'#ffeaa7':'#55efc4'}; color:${item.buyback_status==='requested'?'#d6a316':'#00b894'};">${item.buyback_status==='requested'?'審核中':'已回購'}</span>`}
+                            </div>
+                        `).join('')}
+                        <div class="payment-info">
+                            <div>使用購物金抵扣: <span style="color:var(--primary);">-$${wallet}</span></div>
+                            <div>現金支付金額: <span>$${cash}</span></div>
+                            <div style="font-weight:bold; margin-top:5px; font-size:1.1em;">訂單總額: $${batch.total}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // 2. 回購清單渲染 (獨立項目)
+            let completedItems = [];
+            batches.forEach(b => b.items.forEach(i => {
+                if(i.buyback_status === 'completed') completedItems.push({...i, batchDate: b.date});
+            }));
+            
+            let buybackHtml = completedItems.sort((a,b) => b.item_id - a.item_id).map(item => `
+                <div class="card" style="border-left: 6px solid var(--accent); background: #fffdf9;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <strong style="color:var(--accent);">♻️ 回購完成：${item.name}</strong><br>
+                            <small style="color:#999;">原始購買日: ${new Date(item.batchDate).toLocaleDateString()}</small>
+                        </div>
+                        <div style="text-align:right;">
+                            <small style="color:#666;">核發購物金</small>
+                            <div style="color:var(--accent); font-weight:bold; font-size:1.3em;">+$${item.price}</div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            document.getElementById('purchaseList').innerHTML = purchaseHtml || "<p style='color:#999;'>尚無購買紀錄</p>";
+            document.getElementById('buybackHistoryList').innerHTML = buybackHtml || "<p style='color:#999;'>尚無已完成的回購紀錄</p>";
+        }
+
+        // --- 購物車功能 ---
+        function addToCart(id, name, price) {
+            const item = cart.find(i => i.id === id);
+            if (item) item.qty++; else cart.push({ id, name, price, qty: 1 });
+            updateCartUI();
+            alert(`已將「${name}」加入購物車`);
+        }
+
+        function removeFromCart(id) {
+            cart = cart.filter(i => i.id !== id);
+            updateCartUI();
+        }
+
+        function updateCartUI() {
+            const count = cart.reduce((s, i) => s + i.qty, 0);
+            const total = cart.reduce((s, i) => s + (i.price * i.qty), 0);
+            document.getElementById('cartCount').innerText = count;
+            document.getElementById('cartTotal').innerText = `總計: $${total}`;
+            document.getElementById('cartItems').innerHTML = cart.map(item => `
+                <div class="item-row">
+                    <div><strong>${item.name}</strong><br><small>$${item.price} x ${item.qty}</small></div>
+                    <button class="btn-del" onclick="removeFromCart(${item.id})">❌ 移除</button>
+                </div>
+            `).join('');
+        }
+
+        function toggleCart() { document.getElementById('cartSection').classList.toggle('hidden'); }
+
+        async function checkout() {
+            if (cart.length === 0) return;
+            const res = await fetch(`${API_URL}/checkout`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: currentUser.id, items: cart }) });
+            if(res.ok) {
+                cart = []; updateCartUI(); toggleCart(); fetchBuyerData(); alert("🎉 結帳成功！");
+            }
+        }
+
+        async function requestBuyback(iid) {
+            await fetch(`${API_URL}/buyback/request`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item_id: iid })});
+            fetchBuyerData(); alert("回購申請已提交給管理員");
+        }
+
+        // --- 管理員功能 ---
+        async function fetchAdminData() {
+            const invRes = await fetch(`${API_URL}/admin/inventory`);
+            const inv = await invRes.json();
+            document.getElementById('inventoryBody').innerHTML = inv.map(p => `
+                <tr>
+                    <td>#${p.product_id}</td>
+                    <td>${p.name}</td>
+                    <td><input type="number" id="stock_${p.product_id}" value="${p.stock}" style="width:60px; padding:5px;"></td>
+                    <td><button class="btn-admin" onclick="updateStock(${p.product_id})">儲存</button></td>
+                </tr>
+            `).join('');
+
+            const pendRes = await fetch(`${API_URL}/admin/buyback/pending`);
+            const pending = await pendRes.json();
+            document.getElementById('adminPendingList').innerHTML = pending.sort((a,b)=>b.item_id - a.item_id).map(p => `
+                <div class="pending-item">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <strong>${p.username}</strong> 申請回購：${p.name}<br>
+                            <small>購入金額: $${p.purchase_price}</small>
+                        </div>
+                        <div>
+                            回購金: <input type="number" id="refund_${p.item_id}" value="${p.purchase_price}" style="width:70px; padding:5px;">
+                            <button class="btn-buy" style="width:auto; margin-left:10px;" onclick="confirmBuyback(${p.item_id})">核發購物金</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('') || "<p style='color:#999;'>目前無待處理申請</p>";
+        }
+
+        async function updateStock(pid) {
+            const val = document.getElementById(`stock_${pid}`).value;
+            await fetch(`${API_URL}/admin/inventory/${pid}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stock: parseInt(val) }) });
+            fetchAdminData(); alert("庫存已更新");
+        }
+
+        async function addProduct() {
+            const formData = new FormData();
+            formData.append('name', document.getElementById('pName').value);
+            formData.append('price', document.getElementById('pPrice').value);
+            formData.append('stock', document.getElementById('pStock').value);
+            formData.append('image', document.getElementById('pImgFile').files[0]);
+            await fetch(`${API_URL}/products`, { method: 'POST', body: formData });
+            fetchAdminData(); alert("商品已成功上架");
+        }
+
+        async function confirmBuyback(iid) {
+            const amt = document.getElementById(`refund_${iid}`).value;
+            await fetch(`${API_URL}/buyback/confirm`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item_id: iid, refund_amount: parseInt(amt) }) });
+            fetchAdminData(); alert("回購核准成功，購物金已發放。");
+        }
+
+        function filterProducts() {
+            const term = document.getElementById('searchInput').value.toLowerCase();
+            const filtered = allProducts.filter(p => p.name.toLowerCase().includes(term));
+            renderProducts(filtered);
         }
     </script>
 </body>
