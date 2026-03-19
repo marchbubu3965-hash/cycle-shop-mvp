@@ -1,0 +1,4 @@
+node_modules/
+shop.db
+uploads/
+.DS_Store
