@@ -25,12 +25,41 @@ const upload = multer({ storage: storage });
 
 // --- API ---
 
+app.post('/api/register', (req, res) => {
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ message: "帳號密碼不可為空" });
+
+    // 檢查帳號是否已存在
+    db.get("SELECT * FROM Users WHERE username = ?", [username], (err, row) => {
+        if (row) return res.status(400).json({ message: "帳號已存在" });
+
+        // 插入新使用者 (正式環境建議使用 bcrypt 加密 password)
+        const sql = `INSERT INTO Users (username, password_hash, is_admin, wallet_balance) VALUES (?, ?, 0, 0)`;
+        db.run(sql, [username, password], function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ message: "註冊成功", userId: this.lastID });
+        });
+    });
+});
+
+// 2. 修改登入 API (加入密碼驗證)
 app.post('/api/login', (req, res) => {
-    const { username } = req.body;
+    const { username, password } = req.body;
     db.get("SELECT * FROM Users WHERE username = ?", [username], (err, user) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!user) return res.status(401).json({ message: "使用者不存在" });
-        res.json({ id: user.user_id, username: user.username, isAdmin: user.is_admin === 1, balance: user.wallet_balance });
+        
+        // 驗證密碼 (目前簡單比對字串)
+        if (user.password_hash !== password) {
+            return res.status(401).json({ message: "密碼錯誤" });
+        }
+
+        res.json({ 
+            id: user.user_id, 
+            username: user.username, 
+            isAdmin: user.is_admin === 1, 
+            balance: user.wallet_balance 
+        });
     });
 });
 

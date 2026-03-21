@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!-- <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
@@ -29,9 +29,23 @@
 <body>
 
     <div id="loginPage" class="card" style="max-width: 380px; margin: 100px auto; text-align: center;">
-        <h2>♻️ 循環商城</h2>
-        <input type="text" id="usernameInput" placeholder="請輸入帳號" style="width:100%; padding:12px; margin-bottom:15px; box-sizing:border-box; border-radius:8px; border:1px solid #ddd;">
-        <button class="btn-buy" onclick="login()">登入系統</button>
+        <h2 id="loginTitle">♻️ 循環商城 - 登入</h2>
+        <input type="text" id="usernameInput" placeholder="請輸入帳號" style="width:100%; padding:12px; margin-bottom:10px; box-sizing:border-box; border-radius:8px; border:1px solid #ddd;">
+        <input type="password" id="passwordInput" placeholder="請輸入密碼" style="width:100%; padding:12px; margin-bottom:15px; box-sizing:border-box; border-radius:8px; border:1px solid #ddd;">
+        
+        <div id="loginActions">
+            <button class="btn-buy" id="primaryBtn" onclick="login()">登入系統</button>
+            <p style="margin-top:15px; font-size:0.9em; color:#666;">
+                還沒有帳號？ <a href="javascript:void(0)" onclick="toggleAuthMode(true)">立即註冊</a>
+            </p>
+        </div>
+        
+        <div id="registerActions" class="hidden">
+            <button class="btn-buy" style="background:var(--secondary);" onclick="register()">確認註冊</button>
+            <p style="margin-top:15px; font-size:0.9em; color:#666;">
+                已有帳號？ <a href="javascript:void(0)" onclick="toggleAuthMode(false)">返回登入</a>
+            </p>
+        </div>
     </div>
 
     <div id="mainPage" class="hidden">
@@ -320,4 +334,357 @@
     </script>
 </body>
 </html>
+ -->
 
+
+ <!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>循環商城 - 專業管理與紀錄切換版</title>
+    <style>
+        :root { --primary: #2ed573; --secondary: #1e90ff; --accent: #f39c12; --danger: #ff4757; --bg: #f4f7f6; }
+        body { font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif; max-width: 1100px; margin: 20px auto; padding: 20px; background: var(--bg); color: #2c3e50; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); margin-bottom: 25px; }
+        .hidden { display: none; }
+        .navbar { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 15px; margin-bottom: 20px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 20px; }
+        .product-card { background: #fff; border-radius: 10px; border: 1px solid #eee; overflow: hidden; display: flex; flex-direction: column; }
+        .product-img { width: 100%; height: 200px; object-fit: cover; background: #eee; }
+        .item-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f1f1f1; }
+        button { cursor: pointer; padding: 8px 16px; border-radius: 6px; border: none; font-weight: bold; }
+        .btn-buy { background: var(--primary); color: white; width: 100%; }
+        .btn-del { background: var(--danger); color: white; padding: 4px 10px; font-size: 0.85em; }
+        .btn-back { background: var(--accent); color: white; font-size: 0.85em; }
+        .tag { font-size: 0.8em; padding: 3px 10px; border-radius: 20px; color: white; font-weight: bold; }
+        
+        .tab-container { display: flex; gap: 10px; margin: 30px 0 15px 0; }
+        .tab-btn { background: #ddd; color: #666; flex: 1; padding: 12px; border-radius: 8px; transition: 0.3s; }
+        .tab-btn.active { background: var(--secondary); color: white; }
+        .tab-btn.active.buyback-tab { background: var(--accent); }
+        
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; }
+    </style>
+</head>
+<body>
+
+    <div id="loginPage" class="card" style="max-width: 380px; margin: 100px auto; text-align: center;">
+        <h2 id="loginTitle">♻️ 循環商城 - 登入</h2>
+        <input type="text" id="usernameInput" placeholder="請輸入帳號" style="width:100%; padding:12px; margin-bottom:10px; box-sizing:border-box; border-radius:8px; border:1px solid #ddd;">
+        <input type="password" id="passwordInput" placeholder="請輸入密碼" style="width:100%; padding:12px; margin-bottom:15px; box-sizing:border-box; border-radius:8px; border:1px solid #ddd;">
+        
+        <div id="loginActions">
+            <button class="btn-buy" onclick="login()">登入系統</button>
+            <p style="margin-top:15px; font-size:0.9em; color:#666;">
+                還沒有帳號？ <a href="javascript:void(0)" onclick="toggleAuthMode(true)">立即註冊</a>
+            </p>
+        </div>
+        
+        <div id="registerActions" class="hidden">
+            <button class="btn-buy" style="background:var(--secondary);" onclick="register()">確認註冊</button>
+            <p style="margin-top:15px; font-size:0.9em; color:#666;">
+                已有帳號？ <a href="javascript:void(0)" onclick="toggleAuthMode(false)">返回登入</a>
+            </p>
+        </div>
+    </div>
+
+    <div id="mainPage" class="hidden">
+        <div class="navbar">
+            <h2 id="welcomeMsg">您好</h2>
+            <div id="cartToggle" style="background:var(--danger); color:white; padding:10px 22px; border-radius:30px; cursor:pointer;" onclick="toggleCart()">🛒 購物車 (<span id="cartCount">0</span>)</div>
+            <button onclick="location.reload()" style="background:#888; color:white;">登出</button>
+        </div>
+
+        <div id="cartSection" class="card hidden" style="border: 2px solid var(--danger);">
+            <h3>🛒 我的購物車</h3>
+            <div id="cartItems"></div>
+            <div id="cartTotal" style="text-align:right; font-weight:bold; margin: 15px 0; font-size: 1.3em; color: var(--danger);">總計: $0</div>
+            <button class="btn-buy" onclick="checkout()">確認結帳</button>
+        </div>
+
+        <div id="buyerUI" class="hidden">
+            <div class="card" style="background: #e3f2fd;">
+                <h4 style="margin:0;">💰 帳戶餘額：<span id="userBalance" style="font-size: 1.4em;">$0</span></h4>
+            </div>
+            
+            <input type="text" id="searchInput" placeholder="🔍 搜尋商品..." style="width:100%; padding:14px; margin-bottom:20px; border-radius:10px; border:1px solid #ddd;" oninput="filterProducts()">
+            <div id="productList" class="grid"></div>
+
+            <div class="tab-container">
+                <button id="btnShowPurchase" class="tab-btn active" onclick="switchTab('purchase')">🛍️ 查看購買紀錄</button>
+                <button id="btnShowBuyback" class="tab-btn buyback-tab" onclick="switchTab('buyback')">♻️ 查看回購紀錄</button>
+            </div>
+
+            <div id="purchaseView">
+                <div id="purchaseList"></div>
+            </div>
+            <div id="buybackView" class="hidden">
+                <div id="buybackHistoryList"></div>
+            </div>
+        </div>
+
+        <div id="adminUI" class="hidden">
+            <div class="card" style="border-top: 6px solid var(--accent);">
+                <h3 style="color: var(--accent);">🛠 庫存管理</h3>
+                <table>
+                    <thead><tr><th>編號</th><th>名稱</th><th>庫存</th><th>操作</th></tr></thead>
+                    <tbody id="inventoryBody"></tbody>
+                </table>
+                <hr style="margin:25px 0;">
+                
+                <h3>➕ 上架新商品</h3>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:15px;">
+                    <input type="text" id="pName" placeholder="商品名稱">
+                    <input type="number" id="pPrice" placeholder="價格">
+                    <input type="number" id="pStock" placeholder="庫存">
+                    <input type="file" id="pImgFile" accept="image/*">
+                </div>
+                <button class="btn-buy" style="width:auto; background: var(--secondary);" onclick="addProduct()">確認並上架商品</button>
+                
+                <hr style="margin:30px 0;">
+                <h3 style="color: var(--accent);">⏳ 待處理回購審核</h3>
+                <div id="adminPendingList"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const BASE_URL = "http://localhost:3000";
+        const API_URL = `${BASE_URL}/api`;
+        let currentUser = null;
+        let allProducts = [];
+        let cart = [];
+
+        // --- 認證功能 ---
+        function toggleAuthMode(isRegister) {
+            document.getElementById('loginTitle').innerText = isRegister ? "♻️ 循環商城 - 註冊" : "♻️ 循環商城 - 登入";
+            document.getElementById('loginActions').classList.toggle('hidden', isRegister);
+            document.getElementById('registerActions').classList.toggle('hidden', !isRegister);
+        }
+
+        async function register() {
+            const username = document.getElementById('usernameInput').value;
+            const password = document.getElementById('passwordInput').value;
+            if(!username || !password) return alert("請輸入帳號密碼");
+
+            const res = await fetch(`${API_URL}/register`, { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({ username, password }) 
+            });
+            const data = await res.json();
+            if (res.ok) { alert("註冊成功，請登入！"); toggleAuthMode(false); }
+            else { alert(data.message); }
+        }
+
+        async function login() {
+            const username = document.getElementById('usernameInput').value;
+            const password = document.getElementById('passwordInput').value;
+            if(!username || !password) return alert("請輸入帳號密碼");
+
+            const res = await fetch(`${API_URL}/login`, { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({ username, password }) 
+            });
+            if (res.ok) { 
+                currentUser = await res.json(); 
+                showUI(); 
+            } else {
+                const data = await res.json();
+                alert(data.message || "登入失敗");
+            }
+        }
+
+        function showUI() {
+            document.getElementById('loginPage').classList.add('hidden');
+            document.getElementById('mainPage').classList.remove('hidden');
+            document.getElementById('welcomeMsg').innerText = `👋 您好，${currentUser.username}${currentUser.isAdmin ? ' (管理員)' : ''}`;
+            if (currentUser.isAdmin) {
+                document.getElementById('adminUI').classList.remove('hidden');
+                document.getElementById('buyerUI').classList.add('hidden');
+                fetchAdminData();
+            } else {
+                document.getElementById('buyerUI').classList.remove('hidden');
+                document.getElementById('adminUI').classList.add('hidden');
+                fetchBuyerData();
+            }
+        }
+
+        // --- 頁籤切換 ---
+        function switchTab(type) {
+            const pView = document.getElementById('purchaseView');
+            const bView = document.getElementById('buybackView');
+            const pBtn = document.getElementById('btnShowPurchase');
+            const bBtn = document.getElementById('btnShowBuyback');
+
+            if (type === 'purchase') {
+                pView.classList.remove('hidden'); bView.classList.add('hidden');
+                pBtn.classList.add('active'); bBtn.classList.remove('active');
+            } else {
+                pView.classList.add('hidden'); bView.classList.remove('hidden');
+                pBtn.classList.remove('active'); bBtn.classList.add('active');
+            }
+        }
+
+        async function fetchBuyerData() {
+            // 更新餘額
+            const res = await fetch(`${API_URL}/products`);
+            allProducts = await res.json();
+            renderProducts(allProducts);
+
+            const orderRes = await fetch(`${API_URL}/user/${currentUser.id}/orders`);
+            const batches = await orderRes.json();
+            renderComprehensiveLogs(batches.sort((a,b) => b.id - a.id));
+            
+            // 這裡從後端重新抓一次餘額確保準確
+            document.getElementById('userBalance').innerText = `$${currentUser.balance}`;
+        }
+
+        function renderProducts(prods) {
+            document.getElementById('productList').innerHTML = prods.map(p => `
+                <div class="product-card">
+                    <img class="product-img" src="${p.description ? BASE_URL + p.description : 'https://via.placeholder.com/240x200'}">
+                    <div style="padding:15px;">
+                        <h4>${p.name}</h4>
+                        <p style="color:var(--danger); font-weight:bold;">$${p.price}</p>
+                        <p style="font-size:0.8em; color:#888;">庫存: ${p.stock}</p>
+                        <button class="btn-buy" onclick="addToCart(${p.product_id}, '${p.name}', ${p.price})">加入購物車</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderComprehensiveLogs(batches) {
+            if (!batches || batches.length === 0) {
+                document.getElementById('purchaseList').innerHTML = "<p>目前尚無購買紀錄</p>";
+                document.getElementById('buybackHistoryList').innerHTML = "<p>目前尚無回購紀錄</p>";
+                return;
+            }
+            // 購買紀錄
+            document.getElementById('purchaseList').innerHTML = batches.map(batch => `
+                <div class="card" style="border-left: 6px solid var(--secondary); margin-bottom:15px;">
+                    <div style="font-size:0.8em; color:#999; margin-bottom:10px;">訂單 #${batch.id} - ${new Date(batch.date).toLocaleString()}</div>
+                    ${batch.items.map(item => `
+                        <div class="item-row">
+                            <span>${item.name} ($${item.price})</span>
+                            <span class="tag" style="background:${item.buyback_status==='none'?'#ddd':item.buyback_status==='requested'?'#ffeaa7':'#55efc4'}; color:#333;">
+                                ${item.buyback_status==='none' ? '持有中' : item.buyback_status==='requested' ? '審核中' : '已回購'}
+                            </span>
+                            ${item.buyback_status === 'none' ? `<button class="btn-back" onclick="requestBuyback(${item.item_id})">申請回購</button>` : ''}
+                        </div>
+                    `).join('')}
+                    <div style="text-align:right; font-size:0.9em; margin-top:10px; border-top:1px dashed #eee; padding-top:10px;">
+                        抵用金: -$${batch.wallet_used} | 實付: $${batch.total - batch.wallet_used} | <strong>總計: $${batch.total}</strong>
+                    </div>
+                </div>
+            `).join('');
+
+            // 回購紀錄
+            let completed = [];
+            batches.forEach(b => b.items.forEach(i => { if(i.buyback_status === 'completed') completed.push(i); }));
+            document.getElementById('buybackHistoryList').innerHTML = completed.map(item => `
+                <div class="card" style="border-left: 6px solid var(--accent); background: #fffdf9;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <div><strong>♻️ 回購項目：${item.name}</strong><br><small>編號: #${item.item_id}</small></div>
+                        <div style="text-align:right;"><small>核發購物金</small><div style="color:var(--accent); font-weight:bold; font-size:1.2em;">+$${item.refund_amount}</div></div>
+                    </div>
+                </div>
+            `).join('') || "<p>尚無回購紀錄</p>";
+        }
+
+        // --- 購物車與結帳 ---
+        function addToCart(id, name, price) {
+            const item = cart.find(i => i.id === id);
+            if (item) item.qty++; else cart.push({ id, name, price, qty: 1 });
+            updateCartUI();
+        }
+        function updateCartUI() {
+            document.getElementById('cartCount').innerText = cart.reduce((s, i) => s + i.qty, 0);
+            document.getElementById('cartTotal').innerText = `總計: $${cart.reduce((s, i) => s + (i.price * i.qty), 0)}`;
+            document.getElementById('cartItems').innerHTML = cart.map(item => `<div class="item-row"><span>${item.name} ($${item.price} x ${item.qty})</span><button class="btn-del" onclick="removeFromCart(${item.id})">❌</button></div>`).join('');
+        }
+        function removeFromCart(id) { cart = cart.filter(i => i.id !== id); updateCartUI(); }
+        function toggleCart() { document.getElementById('cartSection').classList.toggle('hidden'); }
+
+        async function checkout() {
+            if (cart.length === 0) return;
+            const res = await fetch(`${API_URL}/checkout`, { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({ user_id: currentUser.id, items: cart }) 
+            });
+            if(res.ok) {
+                cart = []; updateCartUI(); toggleCart(); 
+                // 結帳後更新本地餘額預覽 (雖然下次 fetchBuyerData 會刷新，但這裡先扣掉讓使用者有感)
+                const total = cart.reduce((s, i) => s + (i.price * i.qty), 0);
+                currentUser.balance -= Math.min(currentUser.balance, total);
+                fetchBuyerData(); 
+                alert("結帳成功！");
+            }
+        }
+
+        async function requestBuyback(iid) {
+            await fetch(`${API_URL}/buyback/request`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item_id: iid })});
+            fetchBuyerData(); alert("申請成功");
+        }
+
+        // --- 管理員功能 ---
+        async function fetchAdminData() {
+            const invRes = await fetch(`${API_URL}/admin/inventory`);
+            const inv = await invRes.json();
+            document.getElementById('inventoryBody').innerHTML = inv.map(p => `
+                <tr><td>#${p.product_id}</td><td>${p.name}</td><td><input type="number" id="stock_${p.product_id}" value="${p.stock}" style="width:50px;"></td><td><button class="btn-buy" style="width:auto;" onclick="updateStock(${p.product_id})">更新</button></td></tr>
+            `).join('');
+
+            const pendRes = await fetch(`${API_URL}/admin/buyback/pending`);
+            const pending = await pendRes.json();
+            document.getElementById('adminPendingList').innerHTML = pending.map(p => `
+                <div class="card" style="border:1px solid #eee; margin-bottom:10px;">
+                    <strong>${p.username}</strong> 申請回購：${p.name} (原價 $${p.purchase_price})<br>
+                    <div style="margin-top:10px;">
+                        核發金額: <input type="number" id="refund_${p.item_id}" value="${p.purchase_price}" style="width:80px; padding:5px;">
+                        <button class="btn-buy" style="width:auto; margin-left:10px;" onclick="confirmBuyback(${p.item_id})">核發購物金</button>
+                    </div>
+                </div>
+            `).join('') || "<p>目前無待處理申請</p>";
+        }
+
+        async function addProduct() {
+            const formData = new FormData();
+            formData.append('name', document.getElementById('pName').value);
+            formData.append('price', document.getElementById('pPrice').value);
+            formData.append('stock', document.getElementById('pStock').value);
+            formData.append('image', document.getElementById('pImgFile').files[0]);
+            await fetch(`${API_URL}/products`, { method: 'POST', body: formData });
+            fetchAdminData(); alert("上架成功！");
+        }
+
+        async function confirmBuyback(iid) {
+            const amt = document.getElementById(`refund_${iid}`).value;
+            await fetch(`${API_URL}/buyback/confirm`, { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({ item_id: iid, refund_amount: parseInt(amt) }) 
+            });
+            fetchAdminData(); alert("核發成功！");
+        }
+
+        async function updateStock(pid) {
+            const val = document.getElementById(`stock_${pid}`).value;
+            await fetch(`${API_URL}/admin/inventory/${pid}`, { 
+                method: 'PUT', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({ stock: parseInt(val) }) 
+            });
+            fetchAdminData(); alert("庫存已更新");
+        }
+
+        function filterProducts() {
+            const term = document.getElementById('searchInput').value.toLowerCase();
+            renderProducts(allProducts.filter(p => p.name.toLowerCase().includes(term)));
+        }
+    </script>
+</body>
+</html>
