@@ -165,51 +165,76 @@
         }
 
         function renderComprehensiveLogs(batches) {
-            // 1. 購買紀錄
-            let purchaseHtml = batches.map(batch => {
-                const wallet = batch.wallet_used || 0;
-                return `
-                    <div class="card" style="border-left: 6px solid var(--secondary);">
-                        <div style="font-size:0.8em; color:#999; margin-bottom:10px;">訂單 #${batch.id} - ${new Date(batch.date).toLocaleString()}</div>
-                        ${batch.items.map(item => `
-                            <div class="item-row">
-                                <span>${item.name} ($${item.price})</span>
-                                <span class="tag" style="background:${item.buyback_status==='none'?'#ddd':item.buyback_status==='requested'?'#ffeaa7':'#55efc4'}; color:${item.buyback_status==='none'?'#666':item.buyback_status==='requested'?'#d6a316':'#00b894'};">
-                                    ${item.buyback_status==='none' ? '持有中' : item.buyback_status==='requested' ? '審核中' : '已回購'}
-                                </span>
-                                ${item.buyback_status === 'none' ? `<button class="btn-back" onclick="requestBuyback(${item.item_id})">申請回購</button>` : ''}
-                            </div>
-                        `).join('')}
-                        <div style="text-align:right; font-size:0.9em; margin-top:10px; border-top:1px dashed #eee; padding-top:10px;">
-                            抵用購物金: -$${wallet} | 實付現金: $${batch.total - wallet} | <strong>總計: $${batch.total}</strong>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-
-            // 2. 回購紀錄 (關鍵修正：優先顯示 refund_amount)
-            let completedItems = [];
-            batches.forEach(b => b.items.forEach(i => {
-                if(i.buyback_status === 'completed') completedItems.push({...i});
-            }));
+            console.log("開始渲染紀錄，接收到的資料:", batches);
             
-            let buybackHtml = completedItems.sort((a,b) => b.item_id - a.item_id).map(item => `
-                <div class="card" style="border-left: 6px solid var(--accent); background: #fffdf9;">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <div>
-                            <strong style="color:var(--accent);">♻️ 回購項目：${item.name}</strong><br>
-                            <small style="color:#999;">回購完成編號: #${item.item_id}</small>
+            if (!batches || batches.length === 0) {
+                document.getElementById('purchaseList').innerHTML = "<p>目前尚無購買紀錄</p>";
+                document.getElementById('buybackHistoryList').innerHTML = "<p>目前尚無回購紀錄</p>";
+                return;
+            }
+
+            try {
+                // 1. 購買紀錄渲染
+                let purchaseHtml = batches.map(batch => {
+                    const wallet = Number(batch.wallet_used) || 0;
+                    const total = Number(batch.total) || 0;
+                    const cash = total - wallet;
+
+                    return `
+                        <div class="card" style="border-left: 6px solid var(--secondary); margin-bottom:15px;">
+                            <div style="font-size:0.8em; color:#999; margin-bottom:10px;">
+                                訂單 #${batch.id} - ${new Date(batch.date).toLocaleString()}
+                            </div>
+                            ${batch.items.map(item => `
+                                <div class="item-row">
+                                    <span>${item.name} ($${item.price})</span>
+                                    <span class="tag" style="background:${
+                                        item.buyback_status==='none'?'#ddd':
+                                        item.buyback_status==='requested'?'#ffeaa7':'#55efc4'
+                                    }; color:#333;">
+                                        ${item.buyback_status==='none' ? '持有中' : 
+                                        item.buyback_status==='requested' ? '審核中' : '已回購'}
+                                    </span>
+                                    ${item.buyback_status === 'none' ? 
+                                        `<button class="btn-back" onclick="requestBuyback(${item.item_id})">申請回購</button>` : ''}
+                                </div>
+                            `).join('')}
+                            <div style="text-align:right; font-size:0.9em; margin-top:10px; border-top:1px dashed #eee; padding-top:10px;">
+                                抵用金: -$${wallet} | 實付: $${cash} | <strong>總計: $${total}</strong>
+                            </div>
                         </div>
-                        <div style="text-align:right;">
-                            <small style="color:#666;">店家核發購物金</small>
-                            <div style="color:var(--accent); font-weight:bold; font-size:1.4em;">+$${item.refund_amount || item.price}</div>
+                    `;
+                }).join('');
+
+                document.getElementById('purchaseList').innerHTML = purchaseHtml;
+
+                // 2. 回購紀錄渲染 (過濾 completed)
+                let completedItems = [];
+                batches.forEach(b => b.items.forEach(i => {
+                    if(i.buyback_status === 'completed') completedItems.push(i);
+                }));
+                
+                let buybackHtml = completedItems.map(item => `
+                    <div class="card" style="border-left: 6px solid var(--accent); background: #fffdf9;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                                <strong style="color:var(--accent);">♻️ 回購項目：${item.name}</strong><br>
+                                <small>編號: #${item.item_id}</small>
+                            </div>
+                            <div style="text-align:right;">
+                                <small>核發購物金</small>
+                                <div style="color:var(--accent); font-weight:bold; font-size:1.2em;">+$${item.refund_amount}</div>
+                            </div>
                         </div>
                     </div>
-                </div>
-            `).join('');
+                `).join('');
 
-            document.getElementById('purchaseList').innerHTML = purchaseHtml || "<p>尚無購買紀錄</p>";
-            document.getElementById('buybackHistoryList').innerHTML = buybackHtml || "<p>尚無回購紀錄</p>";
+                document.getElementById('buybackHistoryList').innerHTML = buybackHtml || "<p>尚無回購紀錄</p>";
+
+            } catch (err) {
+                console.error("渲染 HTML 時發生錯誤:", err);
+                document.getElementById('purchaseList').innerHTML = "<p style='color:red;'>渲染出錯，請查看 Console</p>";
+            }
         }
 
         // --- 購物車 ---
@@ -295,3 +320,4 @@
     </script>
 </body>
 </html>
+
