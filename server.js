@@ -23,17 +23,15 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 
-// --- API ---
+// --- 認證 API ---
 
 app.post('/api/register', (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ message: "帳號密碼不可為空" });
 
-    // 檢查帳號是否已存在
     db.get("SELECT * FROM Users WHERE username = ?", [username], (err, row) => {
         if (row) return res.status(400).json({ message: "帳號已存在" });
 
-        // 插入新使用者 (正式環境建議使用 bcrypt 加密 password)
         const sql = `INSERT INTO Users (username, password_hash, is_admin, wallet_balance) VALUES (?, ?, 0, 0)`;
         db.run(sql, [username, password], function(err) {
             if (err) return res.status(500).json({ error: err.message });
@@ -42,14 +40,13 @@ app.post('/api/register', (req, res) => {
     });
 });
 
-// 2. 修改登入 API (加入密碼驗證)
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
     db.get("SELECT * FROM Users WHERE username = ?", [username], (err, user) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!user) return res.status(401).json({ message: "使用者不存在" });
         
-        // 驗證密碼 (目前簡單比對字串)
+        // 驗證密碼
         if (user.password_hash !== password) {
             return res.status(401).json({ message: "密碼錯誤" });
         }
@@ -62,6 +59,8 @@ app.post('/api/login', (req, res) => {
         });
     });
 });
+
+// --- 商品與訂單 API ---
 
 app.get('/api/products', (req, res) => {
     const sql = "SELECT * FROM Products WHERE status = 'active' AND stock > 0 ORDER BY product_id DESC";
@@ -87,7 +86,6 @@ app.post('/api/products', upload.single('image'), (req, res) => {
     db.run(sql, [name, imageUrl, price, stock], () => res.json({ message: "OK" }));
 });
 
-// 關鍵修正：確保所有欄位名稱 (AS price, oi.refund_amount) 正確對接前端
 app.get('/api/user/:id/orders', (req, res) => {
     const sql = `
         SELECT 
@@ -103,40 +101,24 @@ app.get('/api/user/:id/orders', (req, res) => {
         ORDER BY o.order_id DESC`;
 
     db.all(sql, [req.params.id], (err, rows) => {
-        if (err) {
-            console.error("❌ SQL 錯誤:", err.message);
-            return res.status(500).json({ error: err.message });
-        }
-        
-        console.log(`查到 ${rows.length} 筆原始資料列`);
-
+        if (err) return res.status(500).json({ error: err.message });
         const orders = rows.reduce((acc, row) => {
             if (!acc[row.order_id]) {
-                // 強制將數值轉換，避免 NULL 導致計算出錯
-                const finalAmt = Number(row.final_amount) || 0;
-                const walletUsed = Number(row.wallet_used) || 0;
-                
                 acc[row.order_id] = { 
                     id: row.order_id, 
                     date: row.created_at, 
-                    total: finalAmt + walletUsed, 
-                    wallet_used: walletUsed,
+                    total: (Number(row.final_amount)||0) + (Number(row.wallet_used)||0), 
+                    wallet_used: row.wallet_used,
                     items: [] 
                 };
             }
             acc[row.order_id].items.push({
-                item_id: row.item_id,
-                name: row.name,
-                price: row.price || 0,
-                buyback_status: row.buyback_status || 'none',
-                refund_amount: row.refund_amount || 0
+                item_id: row.item_id, name: row.name, price: row.price,
+                buyback_status: row.buyback_status, refund_amount: row.refund_amount
             });
             return acc;
         }, {});
-        
-        const result = Object.values(orders);
-        console.log("✅ 整理後的訂單資料:", JSON.stringify(result, null, 2));
-        res.json(result);
+        res.json(Object.values(orders));
     });
 });
 
@@ -175,10 +157,9 @@ app.post('/api/buyback/confirm', (req, res) => {
         db.serialize(() => {
             db.run("BEGIN TRANSACTION");
             db.run("UPDATE Users SET wallet_balance = wallet_balance + ? WHERE user_id = ?", [refund_amount, row.user_id]);
-            // 關鍵修正：將 refund_amount 寫入資料庫
             db.run("UPDATE Order_Items SET buyback_status = 'completed', refund_amount = ? WHERE item_id = ?", [refund_amount, item_id], (err) => {
                 if (err) { db.run("ROLLBACK"); return res.status(500).json({ error: err.message }); }
-                db.run("COMMIT", () => res.json({ message: "OK", refund_amount }));
+                db.run("COMMIT", () => res.json({ message: "OK" }));
             });
         });
     });
